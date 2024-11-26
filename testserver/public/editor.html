@@ -1,0 +1,282 @@
+<html>
+<head>
+    <title>Hello, WebAssembly!</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://unpkg.com/three@0.145.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.145.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.145.0/examples/js/exporters/GLTFExporter.js"></script>
+
+</head>
+<body style="margin:0;">
+
+<canvas  id="ThreeCanvas"></canvas>
+<br>
+<script type="module">
+    
+    let url = new URL(window.location.href);
+    // URLSearchParamsオブジェクトを取得
+    let params = url.searchParams;
+
+// getメソッド 
+    var perspective = 300;
+    if ( params.get('pers')){
+    
+        perspective = params.get('pers');
+    }
+    import init, {computation, rot_x, rot_y, rot_z  ,add_x,add_y,add_z,set_las_data,get_las_data,get_points,add_las_data} from "./pkg/las.js";
+    
+    var hasData = false;    
+      init().then(() => {});
+
+      window.addEventListener('DOMContentLoaded', initScript);
+       var scene;
+      var grid;
+    
+      function initScript() {
+          
+        // サイズを指定
+                const width = document.body.clientWidth;
+        const height = document.body.clientHeight;
+        let rot = 0; // 角度
+
+        // レンダラーを作成
+        const renderer = new THREE.WebGLRenderer({
+          canvas: document.querySelector('#ThreeCanvas'),
+        });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        
+        renderer.setSize(width, height);
+
+        // シーンを作成
+        scene = new THREE.Scene();
+        grid = new THREE.GridHelper( 500,  30, 0x888888, 0x888888 );
+		scene.add( grid );
+        // カメラを作成
+        const camera = new THREE.PerspectiveCamera(45, width / height);
+        const orbitControls = new THREE.OrbitControls( camera, renderer.domElement );
+        
+        // orbitControls.maxPolarAngle = Math.PI * 0.5;
+        // orbitControls.minDistance = 0.1;
+        // orbitControls.maxDistance = 100;
+          const radian = (rot * Math.PI) / 180;
+          // 角度に応じてカメラの位置を設定
+          camera.position.x = perspective * Math.sin(radian);
+          camera.position.z = perspective * Math.cos(radian);
+          // 原点方向を見つめる
+          camera.lookAt(new THREE.Vector3(0, 0, 0));
+       renderer.render(scene, camera);  
+        var tempX = Math.abs(camera.position.x);
+        var tempY = Math.abs(camera.position.y);
+         let frame = 0;
+         orbitControls.addEventListener("change", () => { 
+                
+                 let x =  Math.abs(camera.position.x) ;
+                 let y =  Math.abs(camera.position.y) ;
+                 frame++ ;
+                 if( frame %3 === 0 ){
+                    if( 3 <  Math.abs( x - tempX ) || 3 <  Math.abs( y - tempY ) ){
+                        renderer.render(scene, camera);      
+                        tempX = x;
+                        tempY = y;
+                    }    
+                 }
+         } );
+   function convertFloat64Array(points) {
+    if (points.length % 3 !== 0) {
+        throw new Error("Point cloud data is not a multiple of 3 (x, y, z).");
+    }
+
+    // 新しい Float64Array を作成
+    let convertedPoints = new Float64Array(points.length);
+
+    for (let i = 0; i < points.length; i += 3) {
+        convertedPoints[i] = points[i + 1];      // y
+        convertedPoints[i + 1] = points[i + 2];  // z
+        convertedPoints[i + 2] = points[i];      // x
+    }
+
+    return convertedPoints;
+}
+
+
+      function renderThreeView() {
+    
+    const points = get_points( );
+    
+   console.log(points);
+    
+    setPointsToThreeView( convertFloat64Array (points));
+    
+          // レンダリング
+          renderer.render(scene, camera);
+         // requestAnimationFrame(tick);
+        }
+    
+    var mesh = false ;    
+        function setPointsToThreeView( vertices ) {
+          
+          if(mesh){
+                scene.remove(mesh);
+                mesh.material.dispose();
+                mesh.geometry.dispose();
+            }
+          // 形状データを作成
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+
+          // マテリアルを作成
+          const material = new THREE.PointsMaterial({
+            // 一つ一つのサイズ
+            size: 0.01,
+            // 色
+            color: 0xffffff,
+          });
+
+          // 物体を作成
+          mesh = new THREE.Points(geometry, material);
+          scene.add(mesh);
+        }
+           
+const downloadURL = (data, fileName) => {
+
+    const a = document.createElement('a')
+    a.href = data
+    a.download = fileName
+    document.body.appendChild(a)
+    a.style.display = 'none'
+    a.click()
+    a.remove()
+}
+const downloadBlob = (data, fileName, mimeType) => {
+
+    const blob = new Blob([data], { type: mimeType })
+    const url = window.URL.createObjectURL(blob)
+    downloadURL(url, fileName)
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+}
+
+window.setFileByArg = (file) =>{
+
+            const fileReader = new FileReader();
+            fileReader.onload = function webViewerChangeFileReaderOnload(evt) {
+                const buffer = evt.target.result;
+                const uint8Array = new Uint8Array(buffer);
+                set_las_data(uint8Array);
+                 renderPoints();
+            }
+            fileReader.readAsArrayBuffer(file);
+}
+
+window.setFile = () =>{
+
+            const file = document.getElementById('file').files[0];
+            const fileReader = new FileReader();
+            
+            fileReader.onload = function webViewerChangeFileReaderOnload (evt) {
+                
+                const buffer = evt.target.result;
+                const uint8Array = new Uint8Array(buffer);
+                
+                if( !hasData ){
+                    set_las_data(uint8Array);
+                    hasData = true;
+                }else {
+                    add_las_data(uint8Array);
+                }
+                 renderPoints();
+            }
+            fileReader.readAsArrayBuffer(file);
+}
+
+window.conputeLAS =()=>{    
+                      
+    const x =  document.getElementById('x').value;
+    if(x !== 0 ){ add_x(x); }
+    const y =  document.getElementById('y').value;
+    if(y !== 0 ){ add_y(y); }
+    const z = document.getElementById('z').value;
+    if(z !== 0 ){ add_z(z); }
+    
+    const rotX =  document.getElementById('rotX').value;
+    if(rotX !== 0 ){ rot_x(rotX); }
+    const rotY = document.getElementById('rotY').value;
+    if(rotY !== 0 ){ rot_y(rotY); }
+    const rotZ = document.getElementById('rotZ').value;
+    if(rotZ !== 0 ){ rot_z(rotZ); }
+    
+    computation( );    
+    renderPoints();
+}
+
+    window.renderPoints =()=>{
+    
+    const points = get_points( );
+    setPointsToThreeView(points);
+    renderThreeView();
+    }
+
+    window.exportLASFile = () =>{            
+
+        downloadBlob( get_las_data() ,'test.las','application/octet-stream');
+    }
+
+
+window.addGrid = () => {
+    
+    grid = new THREE.GridHelper( 1000,  30, 0x888888, 0x888888 );
+	scene.add( grid );
+}
+    
+window.clearGrid = () => {
+
+    scene.remove(grid);
+    grid.material.dispose();
+    grid.geometry.dispose();
+}
+
+window.downloadJSON = (data, filename) =>{
+        
+        const blob = new Blob([JSON.stringify(data)], { type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename || 'download';
+        a.click();
+        a.remove();
+}
+      
+    window.downloadGLB = () => {
+
+        clearGrid();    
+        
+        const exporter = new THREE.GLTFExporter();
+        exporter.parse(
+	    scene,
+	    function ( gltf ) {
+
+console.log(gltf);
+		    downloadBlob( gltf, "result.glb","application/octet-stream" );
+	    }, function ( error ) {
+    		console.log( 'An error happened' );
+	    },{
+	          binary :true
+	    });
+        addGrid();
+    }
+}
+
+    </script>
+    
+        <div id="menu" style="    z-index: 999;
+    position: fixed;
+    top: 0;
+    color: white;
+    background: rgba(255,255,255,0.3);">
+        <span><input id="file" type="file"/ onchange="setFile()" > </span>
+  
+         <span><button onClick="downloadGLB()">Export to GLB </button></span>
+         
+         </menu>
+</body>
+</html>

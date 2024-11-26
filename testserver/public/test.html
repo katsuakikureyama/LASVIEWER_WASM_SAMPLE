@@ -1,0 +1,244 @@
+
+<html>
+<head>
+    <title>Hello, WebAssembly!</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://unpkg.com/three@0.145.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.145.0/examples/js/controls/OrbitControls.js"></script>
+
+
+</head>
+<body style="margin:0;">
+
+<canvas  id="ThreeCanvas"></canvas>
+<br>
+<script type="module">
+    
+    import init, {computation, rot_x, rot_y, rot_z  ,add_x,add_y,add_z,set_las_data,get_las_data,get_points,init_panic_hook} from "./pkg/las.js";
+      init().then(() => {
+          
+          init_panic_hook();
+      });
+
+
+      window.addEventListener('DOMContentLoaded', initScript);
+      function initScript() {
+          
+        // サイズを指定
+                const width = document.body.clientWidth;
+        const height = document.body.clientHeight;
+        let rot = 0; // 角度
+
+        // レンダラーを作成
+        const renderer = new THREE.WebGLRenderer({
+          canvas: document.querySelector('#ThreeCanvas'),
+        });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        
+        renderer.setSize(width, height);
+
+        // シーンを作成
+        const scene = new THREE.Scene();
+        const grid = new THREE.GridHelper( 1000,  30, 0x888888, 0x888888 );
+		scene.add( grid );
+        // カメラを作成
+        const camera = new THREE.PerspectiveCamera(45, width / height);
+        const orbitControls = new THREE.OrbitControls( camera, renderer.domElement );
+        
+        // orbitControls.maxPolarAngle = Math.PI * 0.5;
+        // orbitControls.minDistance = 0.1;
+        // orbitControls.maxDistance = 100;
+          const radian = (rot * Math.PI) / 180;
+          // 角度に応じてカメラの位置を設定
+          camera.position.x = 300 * Math.sin(radian);
+          camera.position.z = 300 * Math.cos(radian);
+          // 原点方向を見つめる
+          camera.lookAt(new THREE.Vector3(0, 0, 0));
+       renderer.render(scene, camera);      
+        var tempX = Math.abs(camera.position.x);
+        var tempY = Math.abs(camera.position.y);
+         let frame = 0;
+         orbitControls.addEventListener("change", () => { 
+                
+                 let x =  Math.abs(camera.position.x) ;
+                 let y =  Math.abs(camera.position.y) ;
+                 frame++ ;
+                 if( frame %3 === 0 ){
+                    if( 3 <  Math.abs( x - tempX ) || 3 <  Math.abs( y - tempY ) ){
+                        renderer.render(scene, camera);      
+                        tempX = x;
+                        tempY = y;
+                    }    
+                 }
+         } );
+       
+
+      function renderThreeView() {
+    
+       
+          // レンダリング
+          renderer.render(scene, camera);
+          
+         // requestAnimationFrame(tick);
+        }
+    
+    var mesh = false ;    
+        function setPointsToThreeView( vertices ) {
+          
+          var k = 0;
+          var count = 0;
+          var data =  "";
+          for ( var i=0;   i < vertices.length ; i++ ){
+
+//console.log(vertices[i]);
+                if (k  ==  0){      
+                                   
+                   data +=  (   (Number(vertices[i]*1) ))   ;
+                    k ++  ;
+              }  else if (k  ==  1){       
+                                        
+                   data += "," + (   ( Number(vertices[i]*1) ));
+                    k ++  ;
+              } else
+                if (k  ==  2){          
+                    data += "," +(    ( Number(vertices[i]*1)  ) )+ "\n" ;
+                    k =0 ;
+              }  
+              count ++ ;
+              
+              if( 92 < count ) {
+                  break;
+              }
+          }
+          // console.log(data);
+         
+          const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
+       const filename = "download.csv";
+    
+          const blob = new Blob([bom, data], { type: "text/csv" });
+
+    //IE10/11用(download属性が機能しないためmsSaveBlobを使用）
+        //BlobからオブジェクトURLを作成する
+        const url = (window.URL || window.webkitURL).createObjectURL(blob);
+        //ダウンロード用にリンクを作成する
+        const download = document.createElement("a");
+        //リンク先に上記で生成したURLを指定する
+        download.href = url;
+        //download属性にファイル名を指定する
+        download.download = filename;
+        //作成したリンクをクリックしてダウンロードを実行する
+        download.click();
+        //createObjectURLで作成したオブジェクトURLを開放する
+        (window.URL || window.webkitURL).revokeObjectURL(url);
+          
+          if(mesh){
+                scene.remove(mesh);
+                mesh.material.dispose();
+                mesh.geometry.dispose();
+            }
+          // 形状データを作成
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+
+          // マテリアルを作成
+          const material = new THREE.PointsMaterial({
+            // 一つ一つのサイズ
+            size: 1,
+            // 色
+            color: 0xffffff,
+          });
+
+          // 物体を作成
+          mesh = new THREE.Points(geometry, material);
+          scene.add(mesh);
+        }
+           
+const downloadURL = (data, fileName) => {
+
+    const a = document.createElement('a')
+    a.href = data
+    a.download = fileName
+    document.body.appendChild(a)
+    a.style.display = 'none'
+    a.click()
+    a.remove()
+}
+const downloadBlob = (data, fileName, mimeType) => {
+
+    const blob = new Blob([data], { type: mimeType })
+    const url = window.URL.createObjectURL(blob)
+    downloadURL(url, fileName)
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+}
+
+window.setFile = () =>{
+            const file = document.getElementById('file').files[0];
+            const fileReader = new FileReader();
+            fileReader.onload = function webViewerChangeFileReaderOnload(evt) {
+                const buffer = evt.target.result;
+                const uint8Array = new Uint8Array(buffer);
+                set_las_data(uint8Array);
+                 renderPoints();
+            }
+            fileReader.readAsArrayBuffer(file);
+}
+
+window.conputeLAS =()=>{    
+                      
+    const x =  document.getElementById('x').value;
+    if(x !== 0 ){ add_x(x); }
+    const y =  document.getElementById('y').value;
+    if(y !== 0 ){ add_y(y); }
+    const z = document.getElementById('z').value;
+    if(z !== 0 ){ add_z(z); }
+    
+    const rotX =  document.getElementById('rotX').value;
+    if(rotX !== 0 ){ rot_x(rotX); }
+    const rotY = document.getElementById('rotY').value;
+    if(rotY !== 0 ){ rot_y(rotY); }
+    const rotZ = document.getElementById('rotZ').value;
+    if(rotZ !== 0 ){ rot_z(rotZ); }
+    
+    computation( );    
+    renderPoints();
+}
+
+window.renderPoints =()=>{
+    
+    const points = get_points( );
+    
+    
+    setPointsToThreeView(points);
+    renderThreeView();
+}
+
+window.exportLASFile = () =>{            
+
+    downloadBlob( get_las_data() ,'test.las','application/octet-stream');
+}
+
+}
+    </script>
+    
+        <div id="menu" style="    z-index: 999;
+    position: fixed;
+    top: 0;
+    color: white;
+    background: rgba(255,255,255,0.3);">
+        <span><input id="file" type="file"/ onchange="setFile()" > </span><br>
+  
+         <br>
+         <span> X: <input id="x" value="0" type="number"/ > </span> <br>
+         <span> Y:<input id="y" value="0" type="number"/ ></span> <br>
+         <span> Z:<input id="z"  value="0" type="number"/ ></span> <br>
+         
+         <span> rotX:<input id="rotX"  value="0" type="number"/ ></span> <br>
+         <span> rotY:<input id="rotY"  value="0" type="number"/ ></span> <br>
+         <span> rotZ:<input id="rotZ"  value="0" type="number"/ ></span> <br>
+
+         <span><button onClick="conputeLAS()"> 計算する</button></span><br>
+         <span><button onClick="exportLASFile()">ファイルに書き出す</button></span><br>
+         </menu>
+</body>
+</html>
